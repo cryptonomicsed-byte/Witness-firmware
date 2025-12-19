@@ -1,0 +1,44 @@
+
+    ⚡ Witness DePIN Dashboard
+    🔥 Open http://localhost:8888
+    📊 Real-time mesh monitoring
+    
+ * Serving Flask app 'witness_dashboard'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8888
+ * Running on http://192.0.0.2:8888
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 585-178-276
+127.0.0.1 - - [16/Dec/2025 13:57:06] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:29] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:29] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:29] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:30] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [16/Dec/2025 13:57:39] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:39] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:49] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:49] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:59] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:57:59] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:58:09] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:58:09] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:58:15] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 13:58:15] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:04] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:04] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:10] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:10] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:20] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:20] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:30] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:30] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:40] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:40] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:50] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:27:50] "GET /api/ledger HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:28:00] "GET /api/nodes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Dec/2025 14:28:00] "GET /api/ledger HTTP/1.1" 200 -
