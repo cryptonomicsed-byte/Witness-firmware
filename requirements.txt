@@ -1,2 +1,7 @@
-coincurve>=21.0.0
+# MIGRATION NOTE (E-36 / H-13 — 2026-09-23): coincurve (BIP-340 Schnorr) replaced
+# by cryptography (Ed25519) to match the ecosystem-wide Ed25519 standard used by
+# VCP, ARP, Witness Rust broker, and DIP. coincurve kept below (commented) for
+# reference; remove once all deployments have migrated.
+cryptography>=41.0.0
+# coincurve>=21.0.0  # OLD: BIP-340 Schnorr (secp256k1) -- superseded by Ed25519
 rns>=1.4.2

@@ -6,10 +6,11 @@ MicroPython implementation
 
 Physics-proof attestation:
 - Payload hash (SHA256)
-- RSSI + timestamp
-- NIP-01-shaped identity: every node has a real secp256k1 keypair and
-  BIP-340-Schnorr-signs every attestation and receipt it mints. This is
-  the crypto FORMAT only (no relay/network dependency here) -- it closes
+- Ed25519 identity: every node has a real Ed25519 keypair and
+  signs every attestation and receipt it mints. This matches the
+  ecosystem-wide Ed25519 standard used by VCP, ARP, the Witness Rust
+  broker, and DIP (E-36 / H-13 migration from BIP-340 Schnorr).
+  The crypto FORMAT only (no relay/network dependency here) -- it closes
   the "unsigned attestation" and "Sybil-open" gaps identified in the
   ecosystem-alignment audit: node_id used to be a bare string with zero
   cryptographic binding, and gossip consensus only checked that neighbor
@@ -19,6 +20,17 @@ Physics-proof attestation:
   payload, not just N dicts with a matching hash.
 - Cross-node gossip validation
 - Tokenless ledger receipts
+
+MIGRATION NOTE (E-36 / H-13 — 2026-09-23):
+  Previously used BIP-340 Schnorr (coincurve.PrivateKey.sign_schnorr /
+  PublicKeyXOnly) which is incompatible with every other ecosystem
+  component. Now uses Ed25519 via `cryptography` (hazmat primitives):
+    - Key derivation: from seed via HKDF-SHA256 with domain
+      b"witness-firmware/ed25519/v1" for determinism.
+    - Signature format: standard 64-byte Ed25519 signature, hex-encoded.
+    - Public key format: 32-byte Ed25519 public key, hex-encoded.
+    - sig_algo field in attestations/receipts: "ed25519".
+  Schnorr code preserved below (commented out) for reference.
 
 NOTE ON WHAT THIS DOES NOT FIX: spoofable RSSI and the mock radio below
 are a physical-layer problem signing cannot solve alone -- a node can
@@ -40,7 +52,23 @@ import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
-from coincurve import PrivateKey, PublicKeyXOnly
+# Ed25519 via `cryptography` -- matches the ecosystem-wide standard (VCP/ARP/
+# Witness Rust broker/DIP all use Ed25519). Replaces coincurve BIP-340 Schnorr.
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+    PrivateFormat,
+    NoEncryption,
+)
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives import hashes as crypto_hashes
+
+# MIGRATION NOTE: old import kept commented for reference.
+# from coincurve import PrivateKey, PublicKeyXOnly
 
 # ============ Mock for Desktop Testing ============
 # On ESP32, use real LoRa driver (e.g., micropython-sx1278)
@@ -78,38 +106,107 @@ class MockSX1278:
         self.frequency = freq
 
 
-# ============ NIP-01-shaped Node Identity ============
+# ============ Ed25519 Node Identity ============
+# MIGRATION NOTE (E-36 / H-13): Previously "NIP-01-shaped" secp256k1/BIP-340
+# Schnorr identity. Replaced with Ed25519 to match every other ecosystem
+# component (VCP, ARP, Witness Rust broker, DIP). Public API is identical so
+# all callers (PhysicsProof, GossipValidator, TokenlessLedger) work unchanged.
+#
+# Old Schnorr implementation (preserved for reference):
+#
+#   class WitnessIdentity:
+#       def __init__(self, privkey_bytes=None):
+#           self.privkey = PrivateKey(privkey_bytes) if privkey_bytes else PrivateKey()
+#           self.pubkey_xonly = self.privkey.public_key_xonly
+#
+#       @property
+#       def node_id(self):
+#           return self.pubkey_xonly.format().hex()
+#
+#       def sign(self, message):
+#           """BIP-340 Schnorr signature over sha256(message), hex-encoded."""
+#           digest = hashlib.sha256(message).digest()
+#           sig = self.privkey.sign_schnorr(digest)
+#           return sig.hex()
+#
+#       @staticmethod
+#       def verify(pubkey_hex, message, sig_hex):
+#           try:
+#               pk = PublicKeyXOnly(bytes.fromhex(pubkey_hex))
+#               digest = hashlib.sha256(message).digest()
+#               return pk.verify(bytes.fromhex(sig_hex), digest)
+#           except Exception:
+#               return False
+
+_ED25519_HKDF_DOMAIN = b"witness-firmware/ed25519/v1"
+
+
+def _derive_ed25519_key(seed: bytes) -> Ed25519PrivateKey:
+    """Derive a deterministic Ed25519 private key from a 32-byte seed using
+    HKDF-SHA256 with domain b"witness-firmware/ed25519/v1". Compatible with
+    the ecosystem key-derivation convention used by VCP and ARP."""
+    hkdf = HKDF(
+        algorithm=crypto_hashes.SHA256(),
+        length=32,
+        salt=None,
+        info=_ED25519_HKDF_DOMAIN,
+    )
+    key_material = hkdf.derive(seed)
+    return Ed25519PrivateKey.from_private_bytes(key_material)
+
 
 class WitnessIdentity:
-    """A witness node's real cryptographic identity: a secp256k1 keypair,
-    signing in the same BIP-340 Schnorr scheme NIP-01 events use. This is
-    what node_id used to be (a bare string) -- now the pubkey itself IS
-    the node_id, and every claim the node makes is signed by the matching
-    privkey. Persisted locally per node; not tied to any relay/network."""
+    """A witness node's real cryptographic identity: an Ed25519 keypair.
+    Matches the ecosystem-wide Ed25519 standard (VCP, ARP, Witness Rust
+    broker, DIP).  The pubkey (32 bytes, hex-encoded) IS the node_id; every
+    claim the node makes is signed by the matching privkey.  Persisted
+    locally per node; not tied to any relay/network.
+
+    Key derivation: if a seed is provided it is passed through
+    HKDF-SHA256(info=b"witness-firmware/ed25519/v1") so that the same seed
+    always produces the same keypair deterministically.  If no seed is given
+    a fresh random key is generated.
+
+    Signature format: standard 64-byte Ed25519 signature, hex-encoded.
+    Public key format: 32-byte raw Ed25519 public key, hex-encoded.
+    sig_algo: "ed25519" (set on attestations / receipts).
+    """
+
+    SIG_ALGO = "ed25519"
 
     def __init__(self, privkey_bytes: Optional[bytes] = None):
-        self.privkey = PrivateKey(privkey_bytes) if privkey_bytes else PrivateKey()
-        self.pubkey_xonly: PublicKeyXOnly = self.privkey.public_key_xonly
+        if privkey_bytes is not None:
+            # Treat supplied bytes as seed; derive deterministically.
+            self._privkey: Ed25519PrivateKey = _derive_ed25519_key(privkey_bytes)
+        else:
+            self._privkey = Ed25519PrivateKey.generate()
+        self._pubkey: Ed25519PublicKey = self._privkey.public_key()
 
     @property
     def node_id(self) -> str:
-        """The x-only pubkey hex, NIP-01 style -- this replaces the old
-        free-text node_id string. Two nodes can never collide on this
-        without colliding on the underlying private key."""
-        return self.pubkey_xonly.format().hex()
+        """The Ed25519 public key hex (32 bytes = 64 hex chars). This replaces
+        the old free-text node_id string and the previous x-only secp256k1
+        pubkey. Two nodes can never collide on this without colliding on the
+        underlying private key."""
+        raw = self._pubkey.public_bytes(Encoding.Raw, PublicFormat.Raw)
+        return raw.hex()
 
     def sign(self, message: bytes) -> str:
-        """BIP-340 Schnorr signature over sha256(message), hex-encoded."""
-        digest = hashlib.sha256(message).digest()
-        sig = self.privkey.sign_schnorr(digest)
-        return sig.hex()
+        """Ed25519 signature over message (raw, no pre-hashing -- Ed25519
+        hashes internally with SHA-512). Returns 64-byte signature hex-encoded.
+        sig_algo: "ed25519"."""
+        sig_bytes = self._privkey.sign(message)
+        return sig_bytes.hex()
 
     @staticmethod
     def verify(pubkey_hex: str, message: bytes, sig_hex: str) -> bool:
+        """Verify an Ed25519 signature. Returns False on any error rather than
+        raising, so callers can treat a bad sig as a simple boolean gate."""
         try:
-            pk = PublicKeyXOnly(bytes.fromhex(pubkey_hex))
-            digest = hashlib.sha256(message).digest()
-            return pk.verify(bytes.fromhex(sig_hex), digest)
+            raw_pub = bytes.fromhex(pubkey_hex)
+            pub = Ed25519PublicKey.from_public_bytes(raw_pub)
+            pub.verify(bytes.fromhex(sig_hex), message)
+            return True
         except Exception:
             return False
 
@@ -143,7 +240,8 @@ class PhysicsProof:
             "payload_hash": payload_hash,
             "rssi": rssi,
             "timestamp": timestamp,
-            "node_id": identity.node_id,  # x-only pubkey, not a free string
+            "node_id": identity.node_id,  # Ed25519 pubkey hex (32 bytes), not a free string
+            "sig_algo": WitnessIdentity.SIG_ALGO,  # "ed25519" -- matches ecosystem standard
             "datetime": datetime.fromtimestamp(timestamp).isoformat(),
         }
 
@@ -154,6 +252,7 @@ class PhysicsProof:
         # A forged RSSI value is still possible (that's the physical-layer
         # gap noted above), but it can no longer be forged as coming from
         # a different node, or altered after the fact without detection.
+        # Signature is 64-byte Ed25519 sig, hex-encoded.
         attestation["sig"] = identity.sign(_signable(attestation))
 
         return attestation
@@ -249,6 +348,7 @@ class TokenlessLedger:
         receipt = {
             "receipt_id": len(self.ledger),
             "node_id": self.node_id,
+            "sig_algo": WitnessIdentity.SIG_ALGO,  # "ed25519" -- matches ecosystem standard
             "attestation": attestation,
             "previous_hash": self.last_hash,
             "timestamp": time.time(),
@@ -258,6 +358,7 @@ class TokenlessLedger:
             _signable(receipt, exclude=("receipt_id",))
         ).hexdigest()
         receipt["receipt_hash"] = receipt_hash
+        # 64-byte Ed25519 signature, hex-encoded.
         receipt["sig"] = self.identity.sign(
             _signable(receipt, exclude=("receipt_id",))
         )
@@ -385,7 +486,7 @@ def demo_witness_ritual():
     ╚════════════════════════════════════════════════════════════╝
     """)
 
-    # Spawn 3 witness nodes, each with a real secp256k1 keypair
+    # Spawn 3 witness nodes, each with a real Ed25519 keypair
     node_a = LoRaWitnessNode()
     node_b = LoRaWitnessNode()
     node_c = LoRaWitnessNode()

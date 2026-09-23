@@ -7,12 +7,12 @@ This is the wiring the ecosystem-alignment audit's round-1/round-2 proposal
 asked for: "Reticulum (RNS) proposed for Witness-firmware's identity/
 signing layer (real crypto identities, no source address, signature-only
 auth)." It is deliberately separate from witness_lora_firmware.py's
-WitnessIdentity (secp256k1/BIP-340 Schnorr, NIP-01-shaped) -- the two
-serve different layers and are not competing:
+WitnessIdentity (Ed25519, migrated from BIP-340 Schnorr per E-36/H-13) --
+the two serve different layers and are not competing:
 
   - WitnessIdentity (witness_lora_firmware.py): signs the ATTESTATION
     content itself (payload_hash/rssi/timestamp) -- the application-level
-    claim, portable to any NIP-01-speaking consumer (relays, other agents).
+    claim, now using Ed25519 to match VCP/ARP/DIP/Witness Rust broker.
   - RNSWitnessIdentity (this file): the TRANSPORT-level identity RNS uses
     to address, route, and authenticate a node on the mesh itself --
     "no source address, signature-only auth" means RNS never trusts a
@@ -83,8 +83,8 @@ class RNSWitnessIdentity:
 
     def sign(self, message: bytes) -> bytes:
         """Sign a message with this node's RNS identity (Ed25519, RNS's
-        own scheme -- distinct from the Schnorr signing in
-        witness_lora_firmware.py's WitnessIdentity)."""
+        own scheme -- both this layer and WitnessIdentity now use Ed25519,
+        but remain independent trust domains as described in the module doc)."""
         return self.identity.sign(message)
 
     @staticmethod
